@@ -25,3 +25,10 @@ prebuilt binaries available in [Releases](https://github.com/xls/outofprocwindow
   results:
   
   ![image](https://user-images.githubusercontent.com/423484/154269641-a4af311e-3095-4133-a32d-83475dfa2b6d.png)
+
+
+logs folder contains the log for the run including
+* pixel format selected (and accepted)
+* any failures to create gl context
+* failure to compile shaders
+* etc..
