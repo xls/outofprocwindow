@@ -68,6 +68,224 @@ const int kMaxNum_Textures		= 100;
 size_t kTexture_width			= 4096;
 size_t kTexture_size			= kTexture_width * kTexture_width * 4;
 
+// ------------------------------
+// Object
+
+
+const char* cube = R"OBJ(# Blender3D v249 OBJ File: untitled.blend
+# www.blender3d.org
+mtllib cube.mtl
+v 1.000000 -1.000000 -1.000000
+v 1.000000 -1.000000 1.000000
+v -1.000000 -1.000000 1.000000
+v -1.000000 -1.000000 -1.000000
+v 1.000000 1.000000 -1.000000
+v 0.999999 1.000000 1.000001
+v -1.000000 1.000000 1.000000
+v -1.000000 1.000000 -1.000000
+vt 0.748573 0.750412
+vt 0.749279 0.501284
+vt 0.999110 0.501077
+vt 0.999455 0.750380
+vt 0.250471 0.500702
+vt 0.249682 0.749677
+vt 0.001085 0.750380
+vt 0.001517 0.499994
+vt 0.499422 0.500239
+vt 0.500149 0.750166
+vt 0.748355 0.998230
+vt 0.500193 0.998728
+vt 0.498993 0.250415
+vt 0.748953 0.250920
+vn 0.000000 0.000000 -1.000000
+vn -1.000000 -0.000000 -0.000000
+vn -0.000000 -0.000000 1.000000
+vn -0.000001 0.000000 1.000000
+vn 1.000000 -0.000000 0.000000
+vn 1.000000 0.000000 0.000001
+vn 0.000000 1.000000 -0.000000
+vn -0.000000 -1.000000 0.000000
+usemtl Material_ray.png
+s off
+f 5/1/1 1/2/1 4/3/1
+f 5/1/1 4/3/1 8/4/1
+f 3/5/2 7/6/2 8/7/2
+f 3/5/2 8/7/2 4/8/2
+f 2/9/3 6/10/3 3/5/3
+f 6/10/4 7/6/4 3/5/4
+f 1/2/5 5/1/5 2/9/5
+f 5/1/6 6/10/6 2/9/6
+f 5/1/7 8/11/7 6/10/7
+f 8/11/7 7/12/7 6/10/7
+f 1/2/8 2/9/8 3/13/8
+f 1/2/8 3/13/8 4/14/8)OBJ";
+
+
+#define EOS_MATCHER_CHAR	'\0'
+
+static int n_isspace(char c)
+{
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+int nscanf(char*& rp, const char* fmt, ...)
+{
+	int cSuccess = 0;
+	
+	const char* fp = fmt;
+	va_list ap;
+	char* ep;
+	char fc;
+	long v;
+	
+	if (*rp == 0) return EOF;
+
+	va_start(ap, fmt);
+
+	while (*rp && *fp) {
+		fc = *fp;
+		if (*rp == 0)
+			return EOF;
+		if (n_isspace(fc)) {
+			/* do nothing */
+		}
+		else if (fc != '%') {
+			while (n_isspace(*rp)) rp++;
+			if (*rp == 0)
+				break;
+			else if (fc != *rp)
+				break;
+			else
+				rp++;
+		}
+		else {  /* fc == '%' */
+			fc = *++fp;
+			if (fc == 'd' || fc == 'x') {
+				int* ip = va_arg(ap, int*);
+				v = strtol(rp, &ep, fc == 'd' ? 10 : 16);
+				if (rp == ep) break;
+				rp = ep;
+				*ip = v;
+				cSuccess++;
+			}
+			else if (fc == 'f' || fc == 'g' || fc == 'e') {
+				double fv = strtod(rp, &ep);
+				if (ep == rp)
+					break;
+				float* vp = va_arg(ap, float*);
+				*vp = (float)fv;
+				cSuccess++;
+				rp = ep;
+			}
+			else if (fc == 's') {
+				char* vp = va_arg(ap, char*);
+				for(;;)
+				{
+					if(n_isspace(*rp))
+						break;
+					*vp++ = *rp++;
+
+				}
+				*vp = 0;
+				cSuccess++;
+				
+			}
+		}
+		fp++;
+	}
+	
+	while (n_isspace(*rp)) rp++;
+
+	va_end(ap);
+	return cSuccess;
+}
+
+class object
+{
+public:
+	object() {}
+	std::vector< unsigned int > vertexIndices, uvIndices, normalIndices;
+	std::vector< glm::vec3 > vertices;
+	std::vector< glm::vec2 > uvs;
+	std::vector< glm::vec3 > normals;
+};
+ 
+std::shared_ptr<object> loadobj(const char* strObj)
+{
+	char* obj = const_cast<char*>(strObj);
+	std::vector< unsigned int > vertexIndices, uvIndices, normalIndices;
+	std::vector< glm::vec3 > temp_vertices;
+	std::vector< glm::vec2 > temp_uvs;
+	std::vector< glm::vec3 > temp_normals;
+
+	object* out = new object();
+	while (1) {
+
+		char lineHeader[128] = { 0 };
+		// read the first word of the line
+		int res = nscanf(obj, "%s", lineHeader);
+		if (res == EOF)
+			break; // EOF = End Of File. Quit the loop.
+		
+		// else : parse lineHeader
+		if (strcmp(lineHeader, "v") == 0) {
+			glm::vec3 vertex;
+			nscanf(obj, "%f %f %f\n", &vertex.x, &vertex.y, &vertex.z);
+			temp_vertices.push_back(vertex);
+
+		}
+		else if (strcmp(lineHeader, "vt") == 0) {
+			glm::vec2 uv;
+			nscanf(obj, "%f %f\n", &uv.x, &uv.y);
+			temp_uvs.push_back(uv);
+		}
+		else if (strcmp(lineHeader, "vn") == 0) {
+			glm::vec3 normal;
+			nscanf(obj, "%f %f %f\n", &normal.x, &normal.y, &normal.z);
+			temp_normals.push_back(normal);
+		}
+		else if (strcmp(lineHeader, "f") == 0) {
+			std::string vertex1, vertex2, vertex3;
+			unsigned int vertexIndex[3], uvIndex[3], normalIndex[3];
+			int matches = nscanf(obj, "%d/%d/%d %d/%d/%d %d/%d/%d\n", &vertexIndex[0], &uvIndex[0], &normalIndex[0], &vertexIndex[1], &uvIndex[1], &normalIndex[1], &vertexIndex[2], &uvIndex[2], &normalIndex[2]);
+			if (matches != 9) {
+				printf("File can't be read by our simple parser : ( Try exporting with other options\n");
+				return std::shared_ptr<object>();
+			}
+			vertexIndices.push_back(vertexIndex[0]);
+			vertexIndices.push_back(vertexIndex[1]);
+			vertexIndices.push_back(vertexIndex[2]);
+			uvIndices.push_back(uvIndex[0]);
+			uvIndices.push_back(uvIndex[1]);
+			uvIndices.push_back(uvIndex[2]);
+			normalIndices.push_back(normalIndex[0]);
+			normalIndices.push_back(normalIndex[1]);
+			normalIndices.push_back(normalIndex[2]);
+		}
+	}
+	// For each vertex of each triangle
+	for (unsigned int i = 0; i < vertexIndices.size(); i++) 
+	{
+			unsigned int vertexIndex = vertexIndices[i];
+			glm::vec3 vertex = temp_vertices[vertexIndex - 1];
+			out->vertices.push_back(vertex);
+	}
+
+	for (unsigned int i = 0; i < uvIndices.size(); i++) 
+	{
+		unsigned int uvIndex = uvIndices[i];
+		glm::vec2 uvs = temp_uvs[uvIndex - 1];
+		out->uvs.push_back(uvs);
+	}
+
+	for (unsigned int i = 0; i < normalIndices.size(); i++) 
+	{
+		unsigned int normalIndex = normalIndices[i];
+		glm::vec3 normal = temp_normals[normalIndex - 1];
+		out->normals.push_back(normal);
+	}
+	return std::shared_ptr<object>(out);
+}
 
 // ------------------------------
 // Shaders
@@ -77,18 +295,64 @@ const char* tshader = R"SHADER(
 
 // Interpolated values from the vertex shaders
 in vec2 UV;
+in vec3 Position_worldspace;
+in vec3 Normal_cameraspace;
+in vec3 EyeDirection_cameraspace;
+in vec3 LightDirection_cameraspace;
 
 // Ouput data
 out vec3 color;
 
 // Values that stay constant for the whole mesh.
 uniform sampler2D myTextureSampler;
+uniform mat4 MV;
+uniform vec3 LightPosition_worldspace;
 
-void main() {
+void main(){
 
-	// Output color = color of the texture at the specified UV
-	color = texture(myTextureSampler, UV).rgb;
-})SHADER";
+	// Light emission properties
+	// You probably want to put them as uniforms
+	vec3 LightColor = vec3(1,1,1);
+	float LightPower = 50.0f;
+	
+	// Material properties
+	vec3 MaterialDiffuseColor = texture( myTextureSampler, UV ).rgb;
+	vec3 MaterialAmbientColor = vec3(0.1,0.1,0.1) * MaterialDiffuseColor;
+	vec3 MaterialSpecularColor = vec3(0.3,0.3,0.3);
+
+	// Distance to the light
+	float distance = length( LightPosition_worldspace - Position_worldspace );
+
+	// Normal of the computed fragment, in camera space
+	vec3 n = normalize( Normal_cameraspace );
+	// Direction of the light (from the fragment to the light)
+	vec3 l = normalize( LightDirection_cameraspace );
+	// Cosine of the angle between the normal and the light direction, 
+	// clamped above 0
+	//  - light is at the vertical of the triangle -> 1
+	//  - light is perpendicular to the triangle -> 0
+	//  - light is behind the triangle -> 0
+	float cosTheta = clamp( dot( n,l ), 0,1 );
+	
+	// Eye vector (towards the camera)
+	vec3 E = normalize(EyeDirection_cameraspace);
+	// Direction in which the triangle reflects the light
+	vec3 R = reflect(-l,n);
+	// Cosine of the angle between the Eye vector and the Reflect vector,
+	// clamped to 0
+	//  - Looking into the reflection -> 1
+	//  - Looking elsewhere -> < 1
+	float cosAlpha = clamp( dot( E,R ), 0,1 );
+	
+	color = 
+		// Ambient : simulates indirect lighting
+		MaterialAmbientColor +
+		// Diffuse : "color" of the object
+		MaterialDiffuseColor * LightColor * LightPower * cosTheta / (distance*distance) +
+		// Specular : reflective highlight, like a mirror
+		MaterialSpecularColor * LightColor * LightPower * pow(cosAlpha,5) / (distance*distance);
+	}
+)SHADER";
 
 
 const char* vshader = R"SHADER(
@@ -98,18 +362,40 @@ const char* vshader = R"SHADER(
 // Input vertex data, different for all executions of this shader.
 layout(location = 0) in vec3 vertexPosition_modelspace;
 layout(location = 1) in vec2 vertexUV;
-
+layout(location = 2) in vec3 vertexNormal_modelspace;
 // Output data ; will be interpolated for each fragment.
 out vec2 UV;
+out vec3 Position_worldspace;
+out vec3 Normal_cameraspace;
+out vec3 EyeDirection_cameraspace;
+out vec3 LightDirection_cameraspace;
 
 // Values that stay constant for the whole mesh.
 uniform mat4 MVP;
+uniform mat4 V;
+uniform mat4 M;
+uniform vec3 LightPosition_worldspace;
 
-void main() {
+void main(){
 
 	// Output position of the vertex, in clip space : MVP * position
-	gl_Position = MVP * vec4(vertexPosition_modelspace, 1);
+	gl_Position =  MVP * vec4(vertexPosition_modelspace,1);
+	
+	// Position of the vertex, in worldspace : M * position
+	Position_worldspace = (M * vec4(vertexPosition_modelspace,1)).xyz;
+	
+	// Vector that goes from the vertex to the camera, in camera space.
+	// In camera space, the camera is at the origin (0,0,0).
+	vec3 vertexPosition_cameraspace = ( V * M * vec4(vertexPosition_modelspace,1)).xyz;
+	EyeDirection_cameraspace = vec3(0,0,0) - vertexPosition_cameraspace;
 
+	// Vector that goes from the vertex to the light, in camera space. M is ommited because it's identity.
+	vec3 LightPosition_cameraspace = ( V * vec4(LightPosition_worldspace,1)).xyz;
+	LightDirection_cameraspace = LightPosition_cameraspace + EyeDirection_cameraspace;
+	
+	// Normal of the the vertex, in camera space
+	Normal_cameraspace = ( V * M * vec4(vertexNormal_modelspace,0)).xyz; // Only correct if ModelMatrix does not scale the model ! Use its inverse transpose if not.
+	
 	// UV of the vertex. No special space for this one.
 	UV = vertexUV;
 }
@@ -291,10 +577,7 @@ static const GLfloat g_uv_buffer_data[] = {
 	1.000004f, 1.0f - 0.671847f,
 	0.667979f, 1.0f - 0.335851f
 };
-
-
-
-
+std::shared_ptr<object> g_object;
 
 // ------------------------------
 // helper stuff
@@ -371,10 +654,45 @@ GLuint _programID;
 GLuint g_vertexbuffer;
 GLuint g_uvbuffer;
 GLuint g_colorbuffer;
+GLuint g_normalbuffer;
 GLuint g_textures[kMaxNum_Textures];
 
 int g_currentTexture = 0;
 
+void makechecker(unsigned int* pixels, size_t wh)
+{
+
+	auto pitch = wh;
+	auto data_size = wh * pitch;
+	const size_t check_size = wh/32;
+
+	for (auto it = pixels; it < pixels + data_size; ) {
+		
+		size_t y = (it - pixels) / pitch;
+		size_t x = (it - pixels - y * pitch);
+
+		memset(it, 0x88, check_size*4);
+		it += check_size;
+
+		if (((y+1) % check_size == 0) && (x == wh-check_size))
+		{
+			it += check_size * 2;
+		}
+		else if (((y+1) % check_size == 0) && (x == wh - check_size*2))
+		{
+			it += check_size*4;
+		}
+		else
+			it += check_size;
+
+		
+
+		
+		int z = 0;
+		z++;
+	}
+	
+}
 // ------------------------------
 // opengl initialization and resource allocation (buffers and shaders)
 
@@ -434,6 +752,8 @@ BOOL InitGLContext(HWND hWnd)
 	gladLoadGL();
 
 	_programID = LoadShaders();
+	
+
 	glShadeModel(GL_SMOOTH);						
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);				
 	glClearDepth(1.0f);									
@@ -453,11 +773,13 @@ BOOL InitGLContext(HWND hWnd)
 	for (auto t = 0; t < kNum_Textures; ++t)
 	{
 		unsigned val = (unsigned int)(gen()) | 0x000000ff;
+		unsigned val2 = (unsigned int)(gen()) | 0x000000ff;
 		::memset32(large_texture, val, kTexture_size);
+		makechecker((unsigned int*)large_texture, kTexture_width);
 		glBindTexture(GL_TEXTURE_2D, g_textures[t]);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, (GLsizei)kTexture_width, (GLsizei)kTexture_width, 0, GL_RGBA, GL_UNSIGNED_BYTE, large_texture);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		
 	} // ignore freeing gl memory (lets see what driver does)
 	LOG(INFO) << "[" << _instance_name << "] " << "Allocated " << ((kNum_Textures* kTexture_size)/(1024*1024)) << "mb of Textures.";
@@ -467,13 +789,13 @@ BOOL InitGLContext(HWND hWnd)
 	glBindVertexArray(VertexArrayID);
 
 
-	
+	g_object = loadobj(cube);
 	// Generate 1 buffer, put the resulting identifier in vertexbuffer
 	glGenBuffers(1, &g_vertexbuffer);
 	// The following commands will talk about our 'vertexbuffer' buffer
 	glBindBuffer(GL_ARRAY_BUFFER, g_vertexbuffer);
 	// Give our vertices to OpenGL.
-	glBufferData(GL_ARRAY_BUFFER, sizeof(g_vertex_buffer_data), g_vertex_buffer_data, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, g_object->vertices.size() * sizeof(glm::vec3), &g_object->vertices[0], GL_STATIC_DRAW);
 
 	
 	// Generate 1 buffer, put the resulting identifier in vertexbuffer
@@ -481,11 +803,11 @@ BOOL InitGLContext(HWND hWnd)
 	// The following commands will talk about our 'vertexbuffer' buffer
 	glBindBuffer(GL_ARRAY_BUFFER, g_uvbuffer);
 	// Give our vertices to OpenGL.
-	glBufferData(GL_ARRAY_BUFFER, sizeof(g_uv_buffer_data), g_uv_buffer_data, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, g_object->uvs.size() * sizeof(glm::vec2), &g_object->uvs[0], GL_STATIC_DRAW);
 	
-	glGenBuffers(1, &g_colorbuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, g_colorbuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(g_color_buffer_data), g_color_buffer_data, GL_STATIC_DRAW);
+	glGenBuffers(1, &g_normalbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, g_normalbuffer);
+	glBufferData(GL_ARRAY_BUFFER, g_object->normals.size() * sizeof(glm::vec3), &g_object->normals[0], GL_STATIC_DRAW);
 
 	return TRUE;
 
@@ -524,15 +846,24 @@ void RenderScene()
 	);
 
 	
-	glm::mat4 Model = glm::rotate(glm::mat4(1), (float)_time*0.02f, glm::vec3(1.0f, 1.00f, 1.00f)); //glm::mat4(1.0f);
+	glm::mat4 Model = glm::rotate(glm::mat4(1), (float)_time*0.02f, glm::vec3(0.5f, 1.00f, 0.50f)); //glm::mat4(1.0f);
 	
 	glm::mat4 mvp = Projection * View * Model;
 
-	GLuint MatrixID = glGetUniformLocation(_programID, "MVP");
+	static GLuint MatrixID = glGetUniformLocation(_programID, "MVP");
+	static GLuint LightID = glGetUniformLocation(_programID, "LightPosition_worldspace");
+	static GLuint ViewMatrixID = glGetUniformLocation(_programID, "V");
+	static GLuint ModelMatrixID = glGetUniformLocation(_programID, "M");
+	static GLuint TextureID = glGetUniformLocation(_programID, "myTextureSampler");
+	
+	glUniform1i(TextureID, 0);
 
-
+	glUniformMatrix4fv(ModelMatrixID, 1, GL_FALSE, &Model[0][0]);
+	glUniformMatrix4fv(ViewMatrixID, 1, GL_FALSE, &View[0][0]);
 	glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &mvp[0][0]);
 
+	glm::vec3 lightPos = glm::vec3(4, 4, 4);
+	glUniform3f(LightID, lightPos.x, lightPos.y, lightPos.z);
 	
 	glEnable(GL_DEPTH_TEST);
 	
@@ -543,6 +874,7 @@ void RenderScene()
 
 	glBindTexture(GL_TEXTURE_2D, g_textures[g_currentTexture]);
 	glBindBuffer(GL_ARRAY_BUFFER, g_vertexbuffer);
+	
 	glVertexAttribPointer(
 		0,                  // vertex
 		3,                  // size
@@ -551,7 +883,8 @@ void RenderScene()
 		0,                  // stride
 		(void*)0            // array buffer offset
 	);
-
+	glEnableVertexAttribArray(1);
+	
 	glBindBuffer(GL_ARRAY_BUFFER, g_uvbuffer);
 	glVertexAttribPointer(
 		1,                  // uv
@@ -561,10 +894,22 @@ void RenderScene()
 		0,                  // stride
 		(void*)0            // array buffer offset
 	);
+	glEnableVertexAttribArray(2);
+	glBindBuffer(GL_ARRAY_BUFFER, g_normalbuffer);
+	glVertexAttribPointer(
+		2,                  // normal
+		3,                  // size
+		GL_FLOAT,           // type
+		GL_FALSE,           // normalized
+		0,                  // stride
+		(void*)0            // array buffer offset
+	);
 
 	
 	glDrawArrays(GL_TRIANGLES, 0, 12 * 3);
 	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+	glDisableVertexAttribArray(2);
 
 	SwapBuffers(_glDC);
 
@@ -675,15 +1020,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    hInst = hInstance; // Store instance handle in our global variable
    
    int cc = 3;
-   int rc = (int)std::roundf((kMax_num_process_count / (float)cc) + 0.5f);
+   int rc = (int)std::roundf((kMax_num_process_count / (float)cc) + 0.49f);
    
 	if(kMax_num_process_count == 0)
 	{
-		hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_BORDER | WS_EX_LAYERED, CW_USEDEFAULT, 0, 640, 480 + 48 /* aprox titlebar*/, NULL, NULL, hInstance, NULL);
+		hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_BORDER | WS_EX_LAYERED, CW_USEDEFAULT, 0, 640, 640 /* aprox titlebar*/, NULL, NULL, hInstance, NULL);
 	}
 	else if (IsMaster())
 	{
-		hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_BORDER | WS_EX_LAYERED, CW_USEDEFAULT, 0, cc * 200 + 18, rc * 200 + 48 /* aprox titlebar*/, NULL, NULL, hInstance, NULL);
+		hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_BORDER | WS_EX_LAYERED, CW_USEDEFAULT, 0, cc * 200 + 18, rc * 200 + 40 /* aprox titlebar*/, NULL, NULL, hInstance, NULL);
 	}
 	else
 	{
@@ -692,8 +1037,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		RECT rect;
 		::GetClientRect(_masterHwnd,&rect);
 		int rowc = (rect.right-rect.left)/200;
-		int y = (int)(count /rowc);
+		int y = (int)(count / rowc);
 		int x = (count - rowc * y);
+		LOG(INFO) << "rowc:" << rowc << " X:" << x << " Y:" << y;
 		hWnd = CreateWindow(szChildClass, "", WS_CHILD|WS_BORDER|WS_EX_LAYERED,x*200, y*200, 200, 200, _masterHwnd, NULL, hInstance, NULL);
 	}
    
@@ -786,7 +1132,8 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 {
 	int argc;
 	char** argv;
-
+	
+	
 	
 	enum  optionIndex {
 		OPT_HELP, OPT_NUM_PROCS, OPT_RESPAWN_SECOND, OPT_NUM_TEXTURES, OPT_TEXT_SIZE
