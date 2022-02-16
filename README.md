@@ -1,4 +1,4 @@
-# outofprocwindow
+# outofprocwindow - vs2019
 naïve sample app to test out of proc opengl and the consequences of terminating processes with allocated opengl/GDI resources.
 
 the test application will spawn N number of processes that attaches to the main window; from which each will allocate a number of textures of specified size and render a cube while binding and enumerating all textures allocated. These processes will be terminated at the interval set by respawn time (in seconds).
