@@ -1039,7 +1039,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 		int rowc = (rect.right-rect.left)/200;
 		int y = (int)(count / rowc);
 		int x = (count - rowc * y);
-		LOG(INFO) << "rowc:" << rowc << " X:" << x << " Y:" << y;
+
 		hWnd = CreateWindow(szChildClass, "", WS_CHILD|WS_BORDER|WS_EX_LAYERED,x*200, y*200, 200, 200, _masterHwnd, NULL, hInstance, NULL);
 	}
    
