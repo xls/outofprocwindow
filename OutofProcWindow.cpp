@@ -749,7 +749,19 @@ BOOL InitGLContext(HWND hWnd)
 	wglMakeCurrent(_glDC, _glRenderContext);
 	GLVersion.major = 3;
 	GLVersion.minor = 3;
-	gladLoadGL();
+	
+	int gladRet = gladLoadGL();
+
+	LOG(INFO) << "[" << _instance_name << "] " << "gladLoadGL version:  " << GLVersion.major << "." << GLVersion.minor;
+	
+	
+	if (glad_glCreateShader == nullptr)
+	{
+		LOG(INFO) << "[" << _instance_name << "] " << "opengl proc: glCreateShader is null";
+		wglDeleteContext(_glRenderContext);
+		_glRenderContext = nullptr;
+		return false;
+	}
 
 	_programID = LoadShaders();
 	
@@ -1281,8 +1293,12 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 			{
 				size_t oldCount = GetSiblings(_currentHwnd);
 				StartNewProcess();
-				while (GetSiblings(_currentHwnd) == oldCount && bClosing == false)
+				int counter = 20;
+				while (GetSiblings(_currentHwnd) == oldCount && bClosing == false && counter > 0)
+				{
 					::Sleep(20);
+					counter--;
+				}
 				size_t count = GetSiblings(_currentHwnd);
 				size_t proc_count = _vProcesses.size();
 				size_t vram = (proc_count * kTexture_size* (long)kNum_Textures) / (1024 * 1024);
